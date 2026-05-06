@@ -1,0 +1,105 @@
+import os
+import argparse
+import numpy as np
+
+import sys
+sys.path.append(os.path.abspath(__file__ + '/../../..'))
+
+import torch
+torch.set_num_threads(3)
+
+from src.models.miniST import Model
+from src.engines.miniST_engine import miniST_Engine
+from src.utils.args import get_public_config
+from src.utils.dataloader import load_dataset, get_dataset_info
+from src.utils.metrics import masked_mae
+from src.utils.logging import get_logger
+
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = False
+
+
+def get_config():
+    parser = get_public_config()
+    parser.add_argument('--patch_len', type=int, default=12)
+    parser.add_argument('--period', type=int, default=96)
+    parser.add_argument('--basis_num', type=int, default=6)
+    parser.add_argument('--orthogonal_weight', type=float, default=0.04)
+    parser.add_argument('--use_orthogonal', type=int, default=1)
+    parser.add_argument('--K', type=int, default=16)
+    parser.add_argument('--n_layer', type=int, default=4)
+    parser.add_argument('--time_of_day_size', type=int, default=96)
+    parser.add_argument('--day_of_week_size', type=int, default=7)
+    parser.add_argument('--is_normal', type=bool, default=True)
+
+    parser.add_argument('--lrate', type=float, default=0.0025)
+    parser.add_argument('--wdecay', type=float, default=1e-4)
+    parser.add_argument('--dropout', type=float, default=0.1)
+    parser.add_argument('--clip_grad_value', type=float, default=5)
+    args = parser.parse_args()
+
+    log_dir = './experiments/{}/{}/'.format(args.model_name, args.dataset)
+    logger = get_logger(log_dir, __name__, 'record_s{}_seq{}_pre{}.log'.format(args.seed,args.seq_len, args.horizon))
+    logger.info(args)
+    
+    return args, log_dir, logger
+
+
+def main():
+    args, log_dir, logger = get_config()
+    set_seed(args.seed)
+    device = torch.device(args.device)
+    
+    data_path, _, node_num = get_dataset_info(args.dataset)
+    
+    dataloader, scaler = load_dataset(data_path, args, logger)
+    
+    pid=os.getpid()
+    logger.info(f"thread ID: {pid}")
+    args.pred_len = args.horizon
+    args.enc_in=node_num
+    model = Model(node_num=node_num,
+                      input_dim=args.input_dim,
+                      output_dim=args.output_dim,
+                      seq_len=args.seq_len,
+                      horizon=args.horizon,
+                        configs=vars(args),
+                        )
+    # seq_len, pred_len, seq_dim, period_len
+    loss_fn = masked_mae
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lrate, weight_decay=args.wdecay)
+    scheduler = None
+
+    engine = miniST_Engine(device=device,
+                        model=model,
+                        dataloader=dataloader,
+                        scaler=scaler,
+                        sampler=None,
+                        loss_fn=loss_fn,
+                        lrate=args.lrate,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        clip_grad_value=args.clip_grad_value,
+                        max_epochs=args.max_epochs, 
+                        patience=args.patience,
+                        log_dir=log_dir,
+                        logger=logger,
+                        seed=args.seed,
+                        seq_len=args.seq_len,
+                        horizon=args.horizon,
+                        bs=args.bs,
+                        orthogonal_weight=args.orthogonal_weight,
+                        )
+
+    if args.mode == 'train':
+        engine.train()
+    else:
+        engine.evaluate(args.mode)
+
+
+if __name__ == "__main__":
+    main()
