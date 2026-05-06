@@ -4,7 +4,7 @@ In our experiments, we use the SD, GBA, GLA, and CA datasets, with the data span
 
 First, you should navigate to the `MiniST/data/ca` directory and run the Jupyter notebook file `process_ca_his.ipynb` to generate the cleaned traffic flow data. Then, go to the `data` directory and execute the `generate_data_for_training.py` script using a command like 
 ```
-`python generate_data_for_training.py --dataset ca --years 2019` 
+python generate_data_for_training.py --dataset ca --years 2019
 ```
 to prepare the data for model training.
 
