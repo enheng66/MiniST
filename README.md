@@ -1,5 +1,4 @@
 # MiniST
-# MiniST
 ## 1. Dataset
 In our experiments, we use the SD, GBA, GLA, and CA datasets, with the data spanning the entire year of 2019. You can download the datasets from the [LargeST](https://github.com/liuxu77/LargeST/blob/main) repository. After downloading the archive.zip file, place it in the `MiniST/data/ca` directory and unzip it.
 
