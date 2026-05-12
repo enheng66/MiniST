@@ -5,78 +5,6 @@ import torch.nn as nn
 from collections import OrderedDict
 from src.base.model import BaseModel
 
-class Block(nn.Module):   
-    def __init__(self, seq_len, pred_len, seq_dim, patch_len,
-                 K):
-        super(Block, self).__init__()
-        n_seg_x = int(np.floor(seq_len / patch_len))
-        n_seg_y = int(np.ceil(pred_len / patch_len))
-
-        intra_key = torch.randn(K, patch_len)
-        self.intra_key = nn.Parameter(intra_key)
-
-        intra_value = torch.randn(K, patch_len)
-        self.intra_value = nn.Parameter(intra_value)
-
-        intra_q = torch.randn(n_seg_x, patch_len)
-        self.intra_q= nn.Parameter(intra_q)
-
-        intra_k=torch.randn(n_seg_x, patch_len)
-        self.intra_k= nn.Parameter(intra_k)
-
-        self.linear_intra_query = nn.Linear(patch_len, patch_len)
-        self.linear_intra_value = nn.Linear(patch_len, patch_len)
-
-        
-        self.linear_inter = nn.Linear(
-            n_seg_x, n_seg_y)
-
-        self.pred_len = pred_len
-        self.seq_dim = seq_dim
-        self.patch_len = patch_len
-        self.n_seg_x = n_seg_x
-        self.n_seg_y = n_seg_y
-       
-
-    def forward(self, x):
-        seq_len_norm = self.n_seg_x * self.patch_len
-        pred_len_norm = self.n_seg_y * self.patch_len
-
-        x = x[:, :, :seq_len_norm]
-        x = x.reshape(
-            -1, self.seq_dim, self.n_seg_x,
-            self.patch_len)
-
-
-        query = self.linear_intra_query(x)
-        key = self.intra_key
-        value = self.intra_value 
-
-        key = key.permute(1, 0)
-        attn1 = torch.matmul(query, key)
-        attn1 = nn.ReLU()(attn1)
-        h1 = torch.matmul(attn1, value)
-
-        q=self.intra_q
-        k=self.intra_k
-        v=self.linear_intra_value(x)
-        k=k.permute(1, 0)
-        attn2 = torch.matmul(q, k)
-        attn2 = nn.ReLU()(attn2)
-
-        h2= torch.matmul(attn2, v)
-        x = x + h1+h2
-
-        x = x.reshape(-1, self.n_seg_x,
-                      self.patch_len)
-        x = x.permute(0, 2, 1)
-
-        y = self.linear_inter(x)
-        y = y.permute(0, 2, 1)
-        y = y.reshape(-1, self.seq_dim,
-                      pred_len_norm)
-        y = y[:, :, :self.pred_len]
-        return y
 
 
 class Model(BaseModel):
@@ -216,12 +144,4 @@ class Aggregation(nn.Module):
         h = h.reshape(-1, self.seq_dim, self.seq_len)
         return h + x
 
-def cal_orthogonal_loss(matrix):
 
-    gram_matrix = torch.matmul(matrix.transpose(-2, -1), matrix)  #  # (batch_size, m, m)
-    one_diag = torch.diagonal(gram_matrix, dim1=-2, dim2=-1)  # # (batch_size, m)
-    two_diag = torch.diag_embed(one_diag)  #  # (batch_size, m, m)
-    off_diagonal = gram_matrix - two_diag  #  # (batch_size, m, m)
-    loss = torch.norm(off_diagonal, dim=(-2, -1))  #
-
-    return loss.mean()  # 
