@@ -123,25 +123,3 @@ class Model(BaseModel):
                 n_param += torch.numel(param)
         return n_param
 
-class Aggregation(nn.Module):
-    def __init__(self, seq_len, seq_dim, patch_len):
-        super(Aggregation, self).__init__()
-
-        padding = int(patch_len // 2)
-        kernel_size = int(1 + 2 * padding)
-        self.conv1d = nn.Conv1d(
-            in_channels=1, out_channels=1, 
-            kernel_size=kernel_size,
-            stride=1, padding=padding,
-            padding_mode="zeros", bias=False)
-
-        self.seq_dim = seq_dim
-        self.seq_len = seq_len
-
-    def forward(self, x):
-        h = x.reshape(-1, 1, self.seq_len)
-        h = self.conv1d(h)
-        h = h.reshape(-1, self.seq_dim, self.seq_len)
-        return h + x
-
-
